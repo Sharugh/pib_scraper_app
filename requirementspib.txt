@@ -1,5 +1,5 @@
 streamlit
-requests
-selectolax
-openpyxl
+requests-html
 pandas
+openpyxl
+
