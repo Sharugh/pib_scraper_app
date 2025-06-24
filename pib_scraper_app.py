@@ -1,7 +1,5 @@
 import streamlit as st
-import requests
-from html.parser import HTMLParser
-import re
+from requests_html import HTMLSession
 import pandas as pd
 from datetime import datetime
 import os
@@ -36,22 +34,25 @@ def load_previous_data():
 def save_data(df):
     df.to_excel("press_releases.xlsx", index=False)
 
-# Extract press releases from PIB
+# Extract press releases using requests-html
 def scrape_press_releases():
     releases = []
-    for page_num in range(1, 5):  # You can increase this to scrape more pages
+    session = HTMLSession()
+
+    for page_num in range(1, 5):  # Scrape first 4 pages
         url = f"{BASE_URL}?PRID=&Page={page_num}&MenuId=3"
-        response = requests.get(url)
-        soup = BeautifulSoup(response.content, "html.parser")
-        press_items = soup.find_all("div", class_="content-area")
+        response = session.get(url)
+        response.html.render(timeout=20, sleep=1)  # render JS, wait a bit
+
+        press_items = response.html.find("div.content-area")
 
         for item in press_items:
             try:
-                title_tag = item.find("a")
+                title_tag = item.find("a", first=True)
                 title = title_tag.text.strip()
-                link = "https://pib.gov.in/" + title_tag['href']
-                date = item.find("span", class_="date").text.strip()
-                ministry = item.find("div", class_="ministry").text.strip()
+                link = "https://pib.gov.in/" + title_tag.attrs["href"]
+                date = item.find("span.date", first=True).text.strip()
+                ministry = item.find("div.ministry", first=True).text.strip()
 
                 if ministry in TARGET_MINISTRIES:
                     matched_keywords = [kw for kw in KEYWORDS if kw.lower() in title.lower()]
@@ -63,8 +64,9 @@ def scrape_press_releases():
                             "Ministry": ministry,
                             "Matched Keywords": ", ".join(matched_keywords)
                         })
-            except Exception as e:
+            except Exception:
                 continue
+
     return releases
 
 # Streamlit UI
@@ -82,7 +84,6 @@ def main():
             st.warning("No new press releases found.")
             return
 
-        # Remove duplicates
         combined_df = pd.concat([new_df, old_df]).drop_duplicates(subset=["Link"])
         new_items = pd.merge(new_df, old_df, how='outer', indicator=True).query('_merge == "left_only"')
         
@@ -104,3 +105,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
