@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
-from bs4 import BeautifulSoup
+from html.parser import HTMLParser
+import re
 import pandas as pd
 from datetime import datetime
 import os
