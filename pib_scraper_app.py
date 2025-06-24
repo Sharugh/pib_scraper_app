@@ -1,7 +1,7 @@
 import streamlit as st
-from requests_html import HTMLSession
+import requests
 import pandas as pd
-from datetime import datetime
+from lxml import html
 import os
 
 # Keywords of interest
@@ -34,25 +34,23 @@ def load_previous_data():
 def save_data(df):
     df.to_excel("press_releases.xlsx", index=False)
 
-# Extract press releases using requests-html
+# Scrape PIB Press Releases using lxml
 def scrape_press_releases():
     releases = []
-    session = HTMLSession()
+    for page in range(1, 4):  # First 3 pages
+        url = f"{BASE_URL}?PRID=&Page={page}&MenuId=3"
+        res = requests.get(url)
+        tree = html.fromstring(res.content)
 
-    for page_num in range(1, 5):  # Scrape first 4 pages
-        url = f"{BASE_URL}?PRID=&Page={page_num}&MenuId=3"
-        response = session.get(url)
-        response.html.render(timeout=20, sleep=1)  # render JS, wait a bit
-
-        press_items = response.html.find("div.content-area")
-
-        for item in press_items:
+        content_blocks = tree.xpath("//div[@class='content-area']")
+        for block in content_blocks:
             try:
-                title_tag = item.find("a", first=True)
-                title = title_tag.text.strip()
-                link = "https://pib.gov.in/" + title_tag.attrs["href"]
-                date = item.find("span.date", first=True).text.strip()
-                ministry = item.find("div.ministry", first=True).text.strip()
+                title_tag = block.xpath(".//a")[0]
+                title = title_tag.text_content().strip()
+                link = "https://pib.gov.in/" + title_tag.attrib["href"]
+
+                date = block.xpath(".//span[@class='date']/text()")[0].strip()
+                ministry = block.xpath(".//div[@class='ministry']/text()")[0].strip()
 
                 if ministry in TARGET_MINISTRIES:
                     matched_keywords = [kw for kw in KEYWORDS if kw.lower() in title.lower()]
@@ -85,8 +83,8 @@ def main():
             return
 
         combined_df = pd.concat([new_df, old_df]).drop_duplicates(subset=["Link"])
-        new_items = pd.merge(new_df, old_df, how='outer', indicator=True).query('_merge == "left_only"')
-        
+        new_items = pd.merge(new_df, old_df, how='outer', indicator=True).query('_merge == 'left_only'')
+
         save_data(combined_df)
 
         st.success(f"✅ {len(new_df)} relevant press releases scraped.")
