@@ -1,5 +1,5 @@
 streamlit
-requests-html
+requests
+lxml
 pandas
 openpyxl
-
